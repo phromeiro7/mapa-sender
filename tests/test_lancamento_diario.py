@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+import alerts
 import db
 import slack_alert
 
@@ -90,6 +91,10 @@ def test_salvar_dispara_envio_de_mudancas_pro_slack(temp_db, monkeypatch):
     """Salvar o lançamento do dia manda automaticamente as mudanças de qualidade pro Slack."""
     monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-fake")
     monkeypatch.setenv("SLACK_CHANNEL", "C123")
+    # Isola o teste do alerta de recarga e do relatório semanal (também disparados no sidebar
+    # de toda página) para não depender do dia da semana / estado de recarga do sender de teste.
+    monkeypatch.setattr(alerts, "verificar_e_alertar_recarga", lambda: {"status": "sem_config"})
+    monkeypatch.setattr(alerts, "verificar_e_enviar_relatorio_semanal", lambda: {"status": "sem_config"})
 
     chamadas = []
 
