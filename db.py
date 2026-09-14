@@ -381,6 +381,38 @@ def set_state(chave, valor):
     conn.close()
 
 
+def try_claim_state(chave, valor):
+    """Tenta reivindicar chave=valor de forma atômica. Retorna True só para a 1ª chamada que
+    conseguir gravar esse valor (as demais, mesmo que concorrentes, recebem False na hora).
+
+    Existe para evitar envios duplicados no Slack: como o sidebar roda em toda sessão/aba do
+    Streamlit, várias pessoas abrindo o app ao mesmo tempo podiam checar "já enviei hoje?" antes
+    de qualquer uma delas terminar de enviar (o envio real ao Slack leva alguns segundos), e todas
+    enviavam. Reivindicando o estado ANTES de enviar (em vez de depois), a corrida vira atômica —
+    quem não ganhar nem tenta enviar. O SQLite serializa a escrita, então mesmo sob concorrência
+    real só uma chamada recebe True.
+    """
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO app_state (chave, valor) VALUES (?, ?) "
+        "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor WHERE app_state.valor IS NOT excluded.valor",
+        (chave, valor),
+    )
+    conn.commit()
+    ganhou = cur.rowcount > 0
+    conn.close()
+    return ganhou
+
+
+def clear_state(chave):
+    """Libera uma chave reivindicada por try_claim_state — usado quando o envio falha, pra
+    permitir tentar de novo na próxima checagem em vez de ficar "travado" achando que já enviou."""
+    conn = get_connection()
+    conn.execute("DELETE FROM app_state WHERE chave=?", (chave,))
+    conn.commit()
+    conn.close()
+
+
 def get_history_df(sender_id=None, data_inicio=None, data_fim=None):
     conn = get_connection()
     query = """

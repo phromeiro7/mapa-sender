@@ -273,3 +273,25 @@ def test_get_alerts_empty_when_all_ok(temp_db):
     temp_db.add_recarga(datetime.date.today().isoformat(), futuro, None)
 
     assert temp_db.get_alerts() == []
+
+
+def test_try_claim_state_so_a_primeira_chamada_ganha(temp_db):
+    """Regressão: alertas duplicados no Slack porque várias sessões do Streamlit liam "ainda
+    não enviei" antes de qualquer uma terminar de enviar. try_claim_state precisa ser atômico —
+    só a 1ª chamada com um valor novo pode ganhar, mesmo chamada várias vezes seguidas simulando
+    sessões concorrentes."""
+    ganhou = [temp_db.try_claim_state("chave_x", "2026-W38") for _ in range(18)]
+    assert ganhou.count(True) == 1
+    assert ganhou[0] is True
+
+
+def test_try_claim_state_permite_novo_valor_depois(temp_db):
+    assert temp_db.try_claim_state("chave_x", "2026-W38") is True
+    assert temp_db.try_claim_state("chave_x", "2026-W38") is False
+    assert temp_db.try_claim_state("chave_x", "2026-W39") is True
+
+
+def test_clear_state_permite_reivindicar_de_novo(temp_db):
+    assert temp_db.try_claim_state("chave_x", "2026-09-14") is True
+    temp_db.clear_state("chave_x")
+    assert temp_db.try_claim_state("chave_x", "2026-09-14") is True

@@ -15,8 +15,8 @@ from db import (
     get_ultima_recarga,
     get_senders_export_recarga,
     get_senders_export_semanal,
-    get_state,
-    set_state,
+    try_claim_state,
+    clear_state,
     QUALIDADE_RANK,
 )
 
@@ -149,7 +149,7 @@ def verificar_e_alertar_recarga():
     if dias not in (DIAS_ANTECEDENCIA, 0):
         return {"status": "fora_do_prazo"}
 
-    if get_state(ESTADO_CHAVE) == hoje.isoformat():
+    if not try_claim_state(ESTADO_CHAVE, hoje.isoformat()):
         return {"status": "ja_alertado_hoje"}
 
     data_fmt = datetime.date.fromisoformat(proxima_recarga).strftime("%d/%m/%Y")
@@ -170,9 +170,9 @@ def verificar_e_alertar_recarga():
             _montar_csv(), f"senders_recarga_{hoje.isoformat()}.csv",
         )
     except Exception as e:
+        clear_state(ESTADO_CHAVE)
         return {"status": "erro", "detalhe": str(e)}
 
-    set_state(ESTADO_CHAVE, hoje.isoformat())
     return {"status": "enviado"}
 
 
@@ -193,7 +193,7 @@ def verificar_e_enviar_relatorio_semanal():
 
     ano, semana, _ = hoje.isocalendar()
     chave_semana = f"{ano}-W{semana:02d}"
-    if get_state(ESTADO_CHAVE_RELATORIO_SEMANAL) == chave_semana:
+    if not try_claim_state(ESTADO_CHAVE_RELATORIO_SEMANAL, chave_semana):
         return {"status": "ja_enviado_essa_semana"}
 
     texto = f":bar_chart: *Relatório semanal de senders* — {hoje.strftime('%d/%m/%Y')}"
@@ -205,7 +205,7 @@ def verificar_e_enviar_relatorio_semanal():
             csv_bytes, f"senders_semanal_{hoje.isoformat()}.csv",
         )
     except Exception as e:
+        clear_state(ESTADO_CHAVE_RELATORIO_SEMANAL)
         return {"status": "erro", "detalhe": str(e)}
 
-    set_state(ESTADO_CHAVE_RELATORIO_SEMANAL, chave_semana)
     return {"status": "enviado"}
